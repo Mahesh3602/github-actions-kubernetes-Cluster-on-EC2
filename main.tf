@@ -21,16 +21,21 @@ terraform {
 ################################
 # Variables
 ################################
-variable "private_key_path" {
-  description = "Path to SSH private key"
+# These are now strings passed from GitHub Secrets
+variable "public_key" {
+  description = "The content of the SSH public key"
   type        = string
-  default     = "~/.ssh/id_rsa"
+}
+
+variable "private_key" {
+  description = "The content of the SSH private key"
+  type        = string
+  sensitive   = true
 }
 
 ################################
 # Data Sources
 ################################
-# Dynamically find available AZs in us-east-1
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -49,7 +54,7 @@ data "aws_ami" "ubuntu_24_04" {
 ################################
 resource "aws_key_pair" "ec2_key" {
   key_name   = "my-terraform-key"
-  public_key = file("${var.private_key_path}.pub")
+  public_key = var.public_key # Uses the variable string directly
 }
 
 ################################
@@ -64,10 +69,8 @@ resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.k8s_vpc.id
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
-  # FIX: Uses the first available AZ (usually us-east-1a) to avoid the t3.small error
   availability_zone       = data.aws_availability_zones.available.names[0]
-
-  tags = { Name = "k8s-public-subnet" }
+  tags                    = { Name = "k8s-public-subnet" }
 }
 
 resource "aws_internet_gateway" "igw" {
@@ -107,7 +110,7 @@ resource "aws_security_group" "k8s_sg" {
     from_port   = 6443
     to_port     = 6443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Modified to allow remote access
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -131,33 +134,30 @@ resource "aws_security_group" "k8s_sg" {
 ################################
 
 resource "aws_instance" "control_plane" {
-  ami           = data.aws_ami.ubuntu_24_04.id
-  instance_type = "t3.small"
-  key_name      = aws_key_pair.ec2_key.key_name
-  subnet_id     = aws_subnet.public_subnet.id
+  ami                    = data.aws_ami.ubuntu_24_04.id
+  instance_type          = "t3.small"
+  key_name               = aws_key_pair.ec2_key.key_name
+  subnet_id              = aws_subnet.public_subnet.id
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
-
-  tags = { Name = "control-plane-01" }
+  tags                   = { Name = "control-plane-01" }
 }
 
 resource "aws_instance" "worker_01" {
-  ami           = data.aws_ami.ubuntu_24_04.id
-  instance_type = "t3.small"
-  key_name      = aws_key_pair.ec2_key.key_name
-  subnet_id     = aws_subnet.public_subnet.id
+  ami                    = data.aws_ami.ubuntu_24_04.id
+  instance_type          = "t3.small"
+  key_name               = aws_key_pair.ec2_key.key_name
+  subnet_id              = aws_subnet.public_subnet.id
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
-
-  tags = { Name = "worker-01" }
+  tags                   = { Name = "worker-01" }
 }
 
 resource "aws_instance" "worker_02" {
-  ami           = data.aws_ami.ubuntu_24_04.id
-  instance_type = "t3.small"
-  key_name      = aws_key_pair.ec2_key.key_name
-  subnet_id     = aws_subnet.public_subnet.id
+  ami                    = data.aws_ami.ubuntu_24_04.id
+  instance_type          = "t3.small"
+  key_name               = aws_key_pair.ec2_key.key_name
+  subnet_id              = aws_subnet.public_subnet.id
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
-
-  tags = { Name = "worker-02" }
+  tags                   = { Name = "worker-02" }
 }
 
 ################################
@@ -166,13 +166,13 @@ resource "aws_instance" "worker_02" {
 
 # 1. Generate the inventory file automatically
 resource "local_file" "ansible_inventory" {
-  content = <<EOT
+  content  = <<EOT
 [control_plane]
-control-plane-01 ansible_host=${aws_instance.control_plane.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=${var.private_key_path}
+control-plane-01 ansible_host=${aws_instance.control_plane.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=./id_rsa
 
 [workers]
-worker-01 ansible_host=${aws_instance.worker_01.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=${var.private_key_path}
-worker-02 ansible_host=${aws_instance.worker_02.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=${var.private_key_path}
+worker-01 ansible_host=${aws_instance.worker_01.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=./id_rsa
+worker-02 ansible_host=${aws_instance.worker_02.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=./id_rsa
 EOT
   filename = "${path.module}/k8s-ansible/inventory.ini"
 }
@@ -185,7 +185,7 @@ resource "null_resource" "wait_for_ssh" {
     connection {
       type        = "ssh"
       user        = "ubuntu"
-      private_key = file(var.private_key_path)
+      private_key = var.private_key # Uses the variable string directly
       host        = aws_instance.control_plane.public_ip
     }
     inline = ["echo 'Instances are ready for Ansible!'"]
