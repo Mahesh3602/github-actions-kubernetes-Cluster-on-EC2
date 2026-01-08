@@ -1,0 +1,36 @@
+name: Deploy K8s Cluster
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  provision-and-configure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init & Apply
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Set up SSH Key for Ansible
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Run Ansible Playbook
+        env:
+          # Tell Ansible not to prompt for host key verification
+          ANSIBLE_HOST_KEY_CHECKING: False
+        run: |
+          cd k8s-ansible
+          ansible-playbook -i inventory.ini control-plane.yml workers.yml
