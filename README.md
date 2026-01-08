@@ -1,15 +1,11 @@
-# This repository is to lauch kubernetes cluster on AWS EC2 instances using Terraform
-# Once the instances are launched configure kubernetes standalone cluster using ansible
+# Info
+- This repo creates kubernetes cluster in aws.
+- It creates 3 ec2 instances , 1 -controlplabe & 2-worker nodes.
 
-# Deploy control plane and 2 worker nodes on AWS
-cd ./Ansible-ec2-standalone-kubernetes-cluster/
-terraform init, plan and apply.
+# prerequisites
+- configured aws credentials in the repo secrets
 
-# Launch Kubernetes cluster on the standalone machines
-cd k8s-ansible
---  update the inventory.ini file 
-ansible-playbook control-plane.yml
-ansible-playbook workers.yml
+# Run the workflow
 
 # check the cluster
 - login to cp using ssh
@@ -34,13 +30,7 @@ export KUBECONFIG=$PWD/kubeconfig
 
 - Allow inbound traffic on security group port 6443 of ControlPlane
 
-# test cluster
-kubectl get nodes
 
-################
-## for one liner quick from the branch 
-terraform init
-terraform apply -auto-approve && cd k8s-ansible && ansible-playbook -i inventory.ini control-plane.yml workers.yml
 
 
 
