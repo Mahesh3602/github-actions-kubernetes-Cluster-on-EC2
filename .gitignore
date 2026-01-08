@@ -1,0 +1,52 @@
+# -----------------------------------------------------------------------
+# Terraform-specific files
+# -----------------------------------------------------------------------
+
+# Terraform State files and backup files
+# These contain the current state of your managed infrastructure 
+# and should be stored remotely (e.g., in S3 or DynamoDB), never committed.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Configuration for remote backends (e.g., local state file on disk)
+# Avoid checking in explicit backend configuration if it contains secrets.
+# This often includes files related to local storage or sensitive configuration.
+.terraform/environment
+.terraform/terraform.tfstate
+.terraform/*
+
+# Terraform Lock File
+# This file manages provider versions. While often harmless, 
+# it can cause unnecessary conflicts in large teams.
+# If you want to enforce specific versions, you can exclude this line.
+.terraform.lock.hcl
+
+# Terraform crash log files
+crash.log
+
+# Terraform plan files
+# These are generated when you save a plan to disk.
+*.tfplan
+
+# Variables that may contain secrets (like passwords or API keys)
+# If you use a file like 'secrets.tfvars' to hold sensitive data.
+# Customize this name if you use a different sensitive file name.
+*.tfvars
+*.auto.tfvars
+
+# -----------------------------------------------------------------------
+# Operating System and IDE Files
+# -----------------------------------------------------------------------
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# JetBrains IDEs (IntelliJ, PyCharm, GoLand, etc.)
+.idea/

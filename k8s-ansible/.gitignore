@@ -1,0 +1,24 @@
+
+# Ansible temporary files
+*.retry
+*.log
+*.retry
+*.swp
+*.bak
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Vault passwords
+vault-password.txt
+
+
+# Ansible facts cache
+fact_cache/
+
+
+
+# System files
+.DS_Store
