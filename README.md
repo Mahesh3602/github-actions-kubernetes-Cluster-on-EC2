@@ -4,6 +4,16 @@
 
 # prerequisites
 - configured aws credentials in the repo secrets
+- configure s3 backend for terraform run (or follow step 3 maunually)
+
+# configure backend
+aws s3 mb s3://backed-bucket-1187 --region us-east-1
+aws dynamodb create-table \                         
+    --table-name terraform-lock-table \
+    --attribute-definitions AttributeName=LockID,AttributeType=S \
+    --key-schema AttributeName=LockID,KeyType=HASH \
+    --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+    --region us-east-1
 
 # Run the workflow
 
