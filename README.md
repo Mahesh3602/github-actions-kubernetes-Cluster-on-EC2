@@ -2,12 +2,14 @@
 - This repo creates kubernetes cluster in aws.
 - It creates 3 ec2 instances , 1 -controlplabe & 2-worker nodes.
 
-# prerequisites
+# Pre-requisites
 - configured aws credentials in the repo secrets
-- configure s3 backend for terraform run (or follow step 3 maunually)
+- configure s3 backend for terraform run (or follow next step to setup maunually)
 
-# configure backend
-aws s3 mb s3://backed-bucket-1187 --region us-east-1
+# Configured backend
+aws s3 mb s3://backed-bucket-1187 --region us-east-1 
+
+
 aws dynamodb create-table \                         
     --table-name terraform-lock-table \
     --attribute-definitions AttributeName=LockID,AttributeType=S \
