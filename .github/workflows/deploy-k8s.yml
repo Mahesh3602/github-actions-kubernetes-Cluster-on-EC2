@@ -1,9 +1,18 @@
-name: Deploy Kubernetes Cluster
+name: Manage Kubernetes Cluster
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Choose action'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
 
 jobs:
-  deploy:
+  manage-infra:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -12,26 +21,31 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init & Apply
+      - name: Terraform Init
+        run: terraform init
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # TF_VAR_ prefix tells Terraform to fill the variable of that name
+
+      - name: Terraform Action (Apply or Destroy)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           TF_VAR_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
           TF_VAR_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          terraform init
-          terraform apply -auto-approve
+          if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+            terraform apply -auto-approve
+          else
+            terraform destroy -auto-approve
+          fi
 
-      - name: Create SSH Key for Ansible
-        run: |
-          # Write the private key to a file so Ansible can read it
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > k8s-ansible/id_rsa
-          chmod 600 k8s-ansible/id_rsa
-
-      - name: Run Ansible Playbook
+      - name: Run Ansible (Only on Apply)
+        if: github.event.inputs.action == 'apply'
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
         run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > k8s-ansible/id_rsa
+          chmod 600 k8s-ansible/id_rsa
           cd k8s-ansible
           ansible-playbook -i inventory.ini control-plane.yml workers.yml
