@@ -21,7 +21,6 @@ terraform {
 ################################
 # Variables
 ################################
-# These are now strings passed from GitHub Secrets
 variable "public_key" {
   description = "The content of the SSH public key"
   type        = string
@@ -54,23 +53,41 @@ data "aws_ami" "ubuntu_24_04" {
 ################################
 resource "aws_key_pair" "ec2_key" {
   key_name   = "my-terraform-key"
-  public_key = var.public_key # Uses the variable string directly
+  public_key = var.public_key 
 }
 
 ################################
 # Networking
 ################################
 resource "aws_vpc" "k8s_vpc" {
-  cidr_block = "10.0.0.0/16"
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
   tags = { Name = "k8s-vpc" }
 }
 
-resource "aws_subnet" "public_subnet" {
+# Created 2 Public Subnets in different AZs
+resource "aws_subnet" "public_subnet_1" {
   vpc_id                  = aws_vpc.k8s_vpc.id
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
   availability_zone       = data.aws_availability_zones.available.names[0]
-  tags                    = { Name = "k8s-public-subnet" }
+  tags = { 
+    Name                               = "k8s-public-subnet-1"
+    "kubernetes.io/role/elb"           = "1"          # Required for public LBs
+    "kubernetes.io/cluster/kubernetes" = "shared"     # Required for Controller discovery
+  }
+}
+
+resource "aws_subnet" "public_subnet_2" {
+  vpc_id                  = aws_vpc.k8s_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  map_public_ip_on_launch = true
+  availability_zone       = data.aws_availability_zones.available.names[1]
+  tags = { 
+    Name                               = "k8s-public-subnet-2"
+    "kubernetes.io/role/elb"           = "1"
+    "kubernetes.io/cluster/kubernetes" = "shared"
+  }
 }
 
 resource "aws_internet_gateway" "igw" {
@@ -85,8 +102,14 @@ resource "aws_route_table" "public_rt" {
   }
 }
 
-resource "aws_route_table_association" "public_assoc" {
-  subnet_id      = aws_subnet.public_subnet.id
+# Associations for both subnets
+resource "aws_route_table_association" "public_assoc_1" {
+  subnet_id      = aws_subnet.public_subnet_1.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+resource "aws_route_table_association" "public_assoc_2" {
+  subnet_id      = aws_subnet.public_subnet_2.id
   route_table_id = aws_route_table.public_rt.id
 }
 
@@ -137,7 +160,7 @@ resource "aws_instance" "control_plane" {
   ami                    = data.aws_ami.ubuntu_24_04.id
   instance_type          = "t3.small"
   key_name               = aws_key_pair.ec2_key.key_name
-  subnet_id              = aws_subnet.public_subnet.id
+  subnet_id              = aws_subnet.public_subnet_1.id
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
   tags                   = { Name = "control-plane-01" }
 }
@@ -146,7 +169,7 @@ resource "aws_instance" "worker_01" {
   ami                    = data.aws_ami.ubuntu_24_04.id
   instance_type          = "t3.small"
   key_name               = aws_key_pair.ec2_key.key_name
-  subnet_id              = aws_subnet.public_subnet.id
+  subnet_id              = aws_subnet.public_subnet_1.id
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
   tags                   = { Name = "worker-01" }
 }
@@ -155,7 +178,8 @@ resource "aws_instance" "worker_02" {
   ami                    = data.aws_ami.ubuntu_24_04.id
   instance_type          = "t3.small"
   key_name               = aws_key_pair.ec2_key.key_name
-  subnet_id              = aws_subnet.public_subnet.id
+  # Placed in the 2nd subnet for HA
+  subnet_id              = aws_subnet.public_subnet_2.id
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
   tags                   = { Name = "worker-02" }
 }
@@ -164,7 +188,6 @@ resource "aws_instance" "worker_02" {
 # Automation: Inventory & SSH Wait
 ################################
 
-# 1. Generate the inventory file automatically
 resource "local_file" "ansible_inventory" {
   content  = <<EOT
 [control_plane]
@@ -177,7 +200,6 @@ EOT
   filename = "${path.module}/k8s-ansible/inventory.ini"
 }
 
-# 2. Wait for SSH to be ready before finishing
 resource "null_resource" "wait_for_ssh" {
   depends_on = [aws_instance.control_plane, aws_instance.worker_01, aws_instance.worker_02]
 
@@ -185,7 +207,7 @@ resource "null_resource" "wait_for_ssh" {
     connection {
       type        = "ssh"
       user        = "ubuntu"
-      private_key = var.private_key # Uses the variable string directly
+      private_key = var.private_key 
       host        = aws_instance.control_plane.public_ip
     }
     inline = ["echo 'Instances are ready for Ansible!'"]
