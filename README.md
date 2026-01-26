@@ -40,7 +40,8 @@ ssh -i my-terraform-key ubuntu@18.234.195.183 'sudo cat /etc/kubernetes/admin.co
 - change public IP in ./kubeconfig
 export KUBECONFIG=$PWD/kubeconfig
 
-- Allow inbound traffic on security group port 6443 of ControlPlane
+# Move this working config to the default spot
+cp kubeconfig ~/.kube/config
 
 
 
