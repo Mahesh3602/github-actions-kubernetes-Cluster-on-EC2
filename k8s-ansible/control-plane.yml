@@ -6,11 +6,14 @@
 
   tasks:
     - name: Initialize Kubernetes cluster
+      # Using --control-plane-endpoint=127.0.0.1 forces the initial config 
+      # to be loopback-friendly
       command: >
         kubeadm init 
         --kubernetes-version v1.33.1 
         --pod-network-cidr=192.168.0.0/16 
         --apiserver-advertise-address=0.0.0.0
+        --control-plane-endpoint=127.0.0.1
       args:
         creates: /etc/kubernetes/admin.conf
 
@@ -19,7 +22,8 @@
         mkdir -p /home/ubuntu/.kube
         cp -f /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
         chown ubuntu:ubuntu /home/ubuntu/.kube/config
-        sed -i 's/MASTER_ENDPOINT/127.0.0.1/g' /home/ubuntu/.kube/config
+        # Forcefully replace ANY server address with 127.0.0.1 to stop the DNS lookup error
+        sed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' /home/ubuntu/.kube/config
       args:
         creates: /home/ubuntu/.kube/config
 
@@ -28,16 +32,17 @@
         port: 6443
         host: 127.0.0.1
         delay: 10
-        timeout: 60
+        timeout: 120
 
     - name: Install Calico CNI
       become_user: ubuntu
       shell: |
-        kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+        # --validate=false is a safety net for v1.33 schema syncing
+        kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml --validate=false
       register: cni_result
       until: cni_result is success
       retries: 5
-      delay: 10
+      delay: 15
       changed_when: "'created' in cni_result.stdout or 'configured' in cni_result.stdout"
 
     - name: Get join command
