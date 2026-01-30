@@ -1,5 +1,12 @@
-- name: Disable swap
+- name: Disable swap immediately
   command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+
+- name: Disable swap permanently (fstab)
+  replace:
+    path: /etc/fstab
+    regexp: '^([^#].*?\sswap\s+.*)$'
+    replace: '# \1'
 
 - name: Load kernel modules
   copy:
@@ -26,13 +33,13 @@
 - name: Apply sysctl
   command: sysctl --system
 
-# --- FIX STARTS HERE: Install GPG and Curl before anything else ---
-- name: Install prerequisite tools (gpg & curl)
+- name: Install prerequisite tools
   apt:
     name:
       - gnupg
       - curl
       - apt-transport-https
+      - ca-certificates
     state: present
     update_cache: yes
 
@@ -46,13 +53,13 @@
   apt:
     name: containerd
     state: present
-    # No update_cache here yet, we'll do it once the K8s repo is fixed
 
-- name: Configure containerd
+- name: Configure containerd (SystemdCgroup fix)
   shell: |
     mkdir -p /etc/containerd
     containerd config default > /etc/containerd/config.toml
-    sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+    sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
+  # Using /g ensures all instances are caught
 
 - name: Restart containerd
   service:
@@ -62,16 +69,13 @@
 
 - name: Install Kubernetes components
   shell: |
-    # Explicitly remove the old list file if it exists to prevent 'apt update' errors
     rm -f /etc/apt/sources.list.d/kubernetes.list
-    
-    # Import key (Now gpg is guaranteed to be there)
     curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-    
-    # Add repo
     echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
-    
-    # Update and install
     apt-get update
     apt-get install -y kubelet=1.33.1-1.1 kubeadm=1.33.1-1.1 kubectl=1.33.1-1.1
     apt-mark hold kubelet kubeadm kubectl containerd
+  register: k8s_pkg_install
+  until: k8s_pkg_install is success
+  retries: 3
+  delay: 10
