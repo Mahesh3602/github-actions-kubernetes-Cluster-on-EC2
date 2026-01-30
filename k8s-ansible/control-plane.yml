@@ -6,7 +6,6 @@
 
   tasks:
     - name: Initialize Kubernetes cluster
-      # Added --apiserver-advertise-address to ensure the correct IP is used
       command: >
         kubeadm init 
         --kubernetes-version v1.33.1 
@@ -20,8 +19,7 @@
         mkdir -p /home/ubuntu/.kube
         cp -f /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
         chown ubuntu:ubuntu /home/ubuntu/.kube/config
-        # Force fix for the MASTER_ENDPOINT error by replacing it with the server's local IP
-        sed -i "s/MASTER_ENDPOINT/127.0.0.1/g" /home/ubuntu/.kube/config
+        sed -i 's/MASTER_ENDPOINT/127.0.0.1/g' /home/ubuntu/.kube/config
       args:
         creates: /home/ubuntu/.kube/config
 
