@@ -15,7 +15,7 @@
       args:
         creates: /etc/kubernetes/admin.conf
 
-    - name: Configure kubectl for ubuntu user
+    - name: Configure and Scrub Kubeconfig
       shell: |
         mkdir -p /home/ubuntu/.kube
         cp -f /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
@@ -24,14 +24,13 @@
         # 1. Force the server address to local loopback
         sed -i 's/server:.*/server: https:\/\/127.0.0.1:6443/' /home/ubuntu/.kube/config
         
-        # 2. Strip out any AWS IAM Authenticator 'exec' blocks that cause the error
-        # This deletes the 'exec' line and the subsequent 4 lines of AWS config
+        # 2. DELETE the AWS 'exec' block entirely. 
+        # This searches for 'exec:' and deletes it plus the next 4 lines.
         sed -i '/exec:/,+4d' /home/ubuntu/.kube/config
         
-        # 3. Wipe the cache to prevent kubectl from remembering old broken endpoints
+        # 3. Clean the cache to stop kubectl from acting like it is in EKS
         rm -rf /home/ubuntu/.kube/cache
-      args:
-        creates: /home/ubuntu/.kube/config
+      # REMOVED 'creates' to ensure this scrubbing always runs
 
     - name: Wait for Kubernetes API Server to be ready
       wait_for:
@@ -44,10 +43,8 @@
       become_user: ubuntu
       environment:
         KUBECONFIG: /home/ubuntu/.kube/config
-        # Neutralize AWS CLI environment influence
         AWS_ACCESS_KEY_ID: ""
         AWS_SECRET_ACCESS_KEY: ""
-        AWS_SESSION_TOKEN: ""
       shell: |
         kubectl apply \
           --server=https://127.0.0.1:6443 \
@@ -58,7 +55,6 @@
       until: cni_result is success
       retries: 5
       delay: 15
-      changed_when: "'created' in cni_result.stdout or 'configured' in cni_result.stdout"
 
     - name: Get join command
       command: kubeadm token create --print-join-command
