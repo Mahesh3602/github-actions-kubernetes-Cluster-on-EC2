@@ -43,6 +43,7 @@ Once the workflow finishes, you can verify and access your cluster.
 
 ### 1. Internal Check (SSH)
 ssh -i <your-key> ubuntu@<CONTROLPLANE_PUBLIC_IP>
+(Ex- ssh -i ubuntu@44.203.176.129 'sudo cat /etc/kubernetes/admin.conf' > ./kubeconfig)
 kubectl get nodes
 kubectl get pods --all-namespaces
 
