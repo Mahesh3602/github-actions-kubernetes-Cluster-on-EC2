@@ -6,12 +6,13 @@
 
   tasks:
     - name: Initialize Kubernetes cluster
+      # We use the internal Private IP so workers can find the API server
       command: >
         kubeadm init 
         --kubernetes-version v1.33.1 
         --pod-network-cidr=192.168.0.0/16 
-        --apiserver-advertise-address=0.0.0.0
-        --control-plane-endpoint=127.0.0.1
+        --apiserver-advertise-address={{ ansible_default_ipv4.address }}
+        --control-plane-endpoint={{ ansible_default_ipv4.address }}
       args:
         creates: /etc/kubernetes/admin.conf
 
@@ -21,21 +22,19 @@
         cp -f /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
         chown ubuntu:ubuntu /home/ubuntu/.kube/config
         
-        # 1. Force the server address to local loopback
-        sed -i 's/server:.*/server: https:\/\/127.0.0.1:6443/' /home/ubuntu/.kube/config
-        
-        # 2. DELETE the AWS 'exec' block entirely. 
-        # This searches for 'exec:' and deletes it plus the next 4 lines.
+        # Remove any AWS IAM 'exec' blocks that cause the authenticator error
         sed -i '/exec:/,+4d' /home/ubuntu/.kube/config
         
-        # 3. Clean the cache to stop kubectl from acting like it is in EKS
+        # Ensure the server address in config matches the Private IP
+        sed -i 's/server:.*/server: https:\/\/{{ ansible_default_ipv4.address }}:6443/' /home/ubuntu/.kube/config
+        
         rm -rf /home/ubuntu/.kube/cache
-      # REMOVED 'creates' to ensure this scrubbing always runs
+      # No 'creates' here so it always fixes the config
 
     - name: Wait for Kubernetes API Server to be ready
       wait_for:
         port: 6443
-        host: 127.0.0.1
+        host: "{{ ansible_default_ipv4.address }}"
         delay: 10
         timeout: 120
 
@@ -46,11 +45,7 @@
         AWS_ACCESS_KEY_ID: ""
         AWS_SECRET_ACCESS_KEY: ""
       shell: |
-        kubectl apply \
-          --server=https://127.0.0.1:6443 \
-          --insecure-skip-tls-verify=true \
-          --validate=false \
-          -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+        kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml --validate=false
       register: cni_result
       until: cni_result is success
       retries: 5
