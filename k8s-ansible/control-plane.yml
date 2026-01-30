@@ -6,8 +6,6 @@
 
   tasks:
     - name: Initialize Kubernetes cluster
-      # Using --control-plane-endpoint=127.0.0.1 forces the initial config 
-      # to be loopback-friendly
       command: >
         kubeadm init 
         --kubernetes-version v1.33.1 
@@ -20,10 +18,13 @@
     - name: Configure kubectl for ubuntu user
       shell: |
         mkdir -p /home/ubuntu/.kube
+        # Force copy to ensure we aren't using an old cached version
         cp -f /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
         chown ubuntu:ubuntu /home/ubuntu/.kube/config
-        # Forcefully replace ANY server address with 127.0.0.1 to stop the DNS lookup error
-        sed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' /home/ubuntu/.kube/config
+        # Total line replacement: find the 'server:' line and overwrite it completely
+        sed -i 's|^    server:.*|    server: https://127.0.0.1:6443|' /home/ubuntu/.kube/config
+        # Delete the cache to stop it from remembering MASTER_ENDPOINT
+        rm -rf /home/ubuntu/.kube/cache
       args:
         creates: /home/ubuntu/.kube/config
 
@@ -36,11 +37,12 @@
 
     - name: Install Calico CNI
       become_user: ubuntu
-      environment:
-        KUBECONFIG: /home/ubuntu/.kube/config
       shell: |
-        # --validate=false is a safety net for v1.33 schema syncing
-        kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml --validate=false
+        kubectl apply \
+          --server=https://127.0.0.1:6443 \
+          --insecure-skip-tls-verify=true \
+          --validate=false \
+          -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
       register: cni_result
       until: cni_result is success
       retries: 5
