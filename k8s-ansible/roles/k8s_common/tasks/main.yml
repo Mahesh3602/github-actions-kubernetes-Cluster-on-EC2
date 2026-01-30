@@ -26,10 +26,27 @@
 - name: Apply sysctl
   command: sysctl --system
 
+# --- FIX STARTS HERE: Install GPG and Curl before anything else ---
+- name: Install prerequisite tools (gpg & curl)
+  apt:
+    name:
+      - gnupg
+      - curl
+      - apt-transport-https
+    state: present
+    update_cache: yes
+
+- name: Create keyring directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
 - name: Install containerd
   apt:
     name: containerd
-    update_cache: yes
+    state: present
+    # No update_cache here yet, we'll do it once the K8s repo is fixed
 
 - name: Configure containerd
   shell: |
@@ -45,9 +62,16 @@
 
 - name: Install Kubernetes components
   shell: |
+    # Explicitly remove the old list file if it exists to prevent 'apt update' errors
+    rm -f /etc/apt/sources.list.d/kubernetes.list
+    
+    # Import key (Now gpg is guaranteed to be there)
     curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    
+    # Add repo
     echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
-    apt update
-    apt install -y kubelet=1.33.1-1.1 kubeadm=1.33.1-1.1 kubectl=1.33.1-1.1
+    
+    # Update and install
+    apt-get update
+    apt-get install -y kubelet=1.33.1-1.1 kubeadm=1.33.1-1.1 kubectl=1.33.1-1.1
     apt-mark hold kubelet kubeadm kubectl containerd
-
