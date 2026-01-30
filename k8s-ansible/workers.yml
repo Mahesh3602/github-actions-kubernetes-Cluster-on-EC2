@@ -10,22 +10,31 @@
 
   tasks:
     - name: Get join command from control plane
-      # We use the name defined in your Terraform-generated inventory.ini
       delegate_to: control-plane-01
       run_once: true
       ansible.builtin.shell: kubeadm token create --print-join-command
       register: join_command_raw
 
-    - name: Set join command as a fact
+    - name: Set join command as a fact for all workers
       ansible.builtin.set_fact:
         kubernetes_join_command: "{{ join_command_raw.stdout }}"
-      delegate_to: "{{ item }}"
-      delegate_facts: true
-      with_items: "{{ groups['workers'] }}"
+
+    - name: Wait for containerd to be fully active
+      ansible.builtin.pause:
+        seconds: 5
 
     - name: Execute Kubernetes join command
       ansible.builtin.shell: "{{ kubernetes_join_command }}"
-      become: yes
       args:
-        # This 'creates' check prevents the worker from trying to join twice
         creates: /etc/kubernetes/kubelet.conf
+      register: join_result
+      # Optional: Helpful for debugging if the join fails
+      failed_when: 
+        - join_result.rc != 0 
+        - "'already exists' not in join_result.stderr"
+
+    - name: Verify kubelet is running
+      ansible.builtin.systemd:
+        name: kubelet
+        state: started
+        enabled: yes
