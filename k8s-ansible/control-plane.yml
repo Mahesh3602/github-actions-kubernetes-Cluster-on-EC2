@@ -18,12 +18,9 @@
     - name: Configure kubectl for ubuntu user
       shell: |
         mkdir -p /home/ubuntu/.kube
-        # Force copy to ensure we aren't using an old cached version
         cp -f /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
         chown ubuntu:ubuntu /home/ubuntu/.kube/config
-        # Total line replacement: find the 'server:' line and overwrite it completely
-        sed -i 's|^    server:.*|    server: https://127.0.0.1:6443|' /home/ubuntu/.kube/config
-        # Delete the cache to stop it from remembering MASTER_ENDPOINT
+        sed -i 's/server:.*/server: https:\/\/127.0.0.1:6443/' /home/ubuntu/.kube/config
         rm -rf /home/ubuntu/.kube/cache
       args:
         creates: /home/ubuntu/.kube/config
