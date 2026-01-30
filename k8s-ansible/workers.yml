@@ -2,9 +2,6 @@
 - name: Configure Kubernetes workers
   hosts: workers
   become: yes
-  vars:
-    containerd_config_path: /etc/containerd/config.toml
-
   roles:
     - role: k8s_common
 
@@ -17,23 +14,25 @@
 
     - name: Set join command as a fact
       ansible.builtin.set_fact:
-        kubernetes_join_command: "{{ join_command_raw.stdout }}"
+        # This takes the '127.0.0.1' from your output and replaces it with the real internal IP
+        kubernetes_join_command: "{{ join_command_raw.stdout | replace('127.0.0.1', hostvars['control-plane-01']['ansible_default_ipv4']['address']) }}"
+
+    - name: Reset kubeadm to clear previous failed attempts
+      ansible.builtin.shell: kubeadm reset -f
+      # Only reset if we haven't successfully joined yet
+      args:
+        removes: /etc/kubernetes/kubelet.conf
+      ignore_errors: yes
 
     - name: Execute Kubernetes join command
       ansible.builtin.shell: "{{ kubernetes_join_command }}"
+      # Async and poll ensure we don't fail if SSH blips during the network setup
+      async: 120
+      poll: 5
       args:
         creates: /etc/kubernetes/kubelet.conf
-      async: 60       # Run for up to 60 seconds
-      poll: 5         # Check status every 5 seconds
-      register: join_result
-      # This handles the SSH drop gracefully
 
-    - name: Wait for workers to settle and SSH to return
-      ansible.builtin.wait_for_connection:
-        delay: 5
-        timeout: 60
-
-    - name: Ensure kubelet is running and enabled
+    - name: Ensure kubelet is started
       ansible.builtin.systemd:
         name: kubelet
         state: started
