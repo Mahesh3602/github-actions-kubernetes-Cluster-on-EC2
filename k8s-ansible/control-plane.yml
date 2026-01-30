@@ -20,7 +20,15 @@
         mkdir -p /home/ubuntu/.kube
         cp -f /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
         chown ubuntu:ubuntu /home/ubuntu/.kube/config
+        
+        # 1. Force the server address to local loopback
         sed -i 's/server:.*/server: https:\/\/127.0.0.1:6443/' /home/ubuntu/.kube/config
+        
+        # 2. Strip out any AWS IAM Authenticator 'exec' blocks that cause the error
+        # This deletes the 'exec' line and the subsequent 4 lines of AWS config
+        sed -i '/exec:/,+4d' /home/ubuntu/.kube/config
+        
+        # 3. Wipe the cache to prevent kubectl from remembering old broken endpoints
         rm -rf /home/ubuntu/.kube/cache
       args:
         creates: /home/ubuntu/.kube/config
@@ -34,6 +42,12 @@
 
     - name: Install Calico CNI
       become_user: ubuntu
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+        # Neutralize AWS CLI environment influence
+        AWS_ACCESS_KEY_ID: ""
+        AWS_SECRET_ACCESS_KEY: ""
+        AWS_SESSION_TOKEN: ""
       shell: |
         kubectl apply \
           --server=https://127.0.0.1:6443 \
