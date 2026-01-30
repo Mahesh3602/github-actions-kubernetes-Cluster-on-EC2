@@ -15,25 +15,25 @@
       ansible.builtin.shell: kubeadm token create --print-join-command
       register: join_command_raw
 
-    - name: Set join command as a fact for all workers
+    - name: Set join command as a fact
       ansible.builtin.set_fact:
         kubernetes_join_command: "{{ join_command_raw.stdout }}"
-
-    - name: Wait for containerd to be fully active
-      ansible.builtin.pause:
-        seconds: 5
 
     - name: Execute Kubernetes join command
       ansible.builtin.shell: "{{ kubernetes_join_command }}"
       args:
         creates: /etc/kubernetes/kubelet.conf
+      async: 60       # Run for up to 60 seconds
+      poll: 5         # Check status every 5 seconds
       register: join_result
-      # Optional: Helpful for debugging if the join fails
-      failed_when: 
-        - join_result.rc != 0 
-        - "'already exists' not in join_result.stderr"
+      # This handles the SSH drop gracefully
 
-    - name: Verify kubelet is running
+    - name: Wait for workers to settle and SSH to return
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 60
+
+    - name: Ensure kubelet is running and enabled
       ansible.builtin.systemd:
         name: kubelet
         state: started
