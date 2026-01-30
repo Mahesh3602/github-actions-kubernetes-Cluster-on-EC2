@@ -6,34 +6,25 @@
     - role: k8s_common
 
   tasks:
-    - name: Get join command from control plane
-      delegate_to: control-plane-01
-      run_once: true
-      ansible.builtin.shell: kubeadm token create --print-join-command
-      register: join_command_raw
-
-    - name: Set join command as a fact
-      ansible.builtin.set_fact:
-        # This takes the '127.0.0.1' from your output and replaces it with the real internal IP
-        kubernetes_join_command: "{{ join_command_raw.stdout | replace('127.0.0.1', hostvars['control-plane-01']['ansible_default_ipv4']['address']) }}"
+    - name: Get join command from memory
+      set_fact:
+        kubernetes_join_command: "{{ hostvars['K8S_JOIN_HOLDER']['command'] }}"
 
     - name: Reset kubeadm to clear previous failed attempts
-      ansible.builtin.shell: kubeadm reset -f
-      # Only reset if we haven't successfully joined yet
+      command: kubeadm reset -f
       args:
         removes: /etc/kubernetes/kubelet.conf
       ignore_errors: yes
 
     - name: Execute Kubernetes join command
-      ansible.builtin.shell: "{{ kubernetes_join_command }}"
-      # Async and poll ensure we don't fail if SSH blips during the network setup
-      async: 120
-      poll: 5
+      shell: "{{ kubernetes_join_command }}"
       args:
         creates: /etc/kubernetes/kubelet.conf
+      async: 180
+      poll: 10
 
-    - name: Ensure kubelet is started
-      ansible.builtin.systemd:
+    - name: Ensure kubelet is running and enabled
+      systemd:
         name: kubelet
         state: started
         enabled: yes
