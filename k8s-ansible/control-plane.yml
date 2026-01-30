@@ -6,34 +6,31 @@
 
   tasks:
     - name: Initialize Kubernetes cluster
-      # Added --pod-network-cidr which is required for Calico to work properly
       command: kubeadm init --kubernetes-version v1.33.1 --pod-network-cidr=192.168.0.0/16
       args:
         creates: /etc/kubernetes/admin.conf
 
     - name: Configure kubectl for ubuntu user
-      become_user: ubuntu
       shell: |
-        mkdir -p $HOME/.kube
-        sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
-        sudo chown $(id -u):$(id -g) $HOME/.kube/config
+        mkdir -p /home/ubuntu/.kube
+        sudo cp /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
+        sudo chown ubuntu:ubuntu /home/ubuntu/.kube/config
       args:
         creates: /home/ubuntu/.kube/config
 
     - name: Install Calico CNI
+      # Use become_user but explicitly point to the config file to be safe
       become_user: ubuntu
       shell: |
-        kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/master/manifests/calico.yaml
-      # This ensures we don't try to re-apply if it's already running
+        kubectl --kubeconfig=/home/ubuntu/.kube/config apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
       register: cni_result
-      changed_when: "'created' in cni_result.stdout"
+      changed_when: "'created' in cni_result.stdout or 'configured' in cni_result.stdout"
 
     - name: Get join command
       command: kubeadm token create --print-join-command
       register: join_cmd
 
     - name: Share join command in-memory
-      # This creates a 'virtual' host that workers can read from
       add_host:
         name: "K8S_JOIN_HOLDER"
         command: "{{ join_cmd.stdout }}"
