@@ -59,7 +59,7 @@ To manage the cluster from your local terminal, you must update the API Server c
 - On your Local Machine:
     #### Download the config
     * ssh -i <your-key> ubuntu@<CONTROLPLANE_PUBLIC_IP> 'sudo cat /etc/kubernetes/admin.conf' > ./kubeconfig
-      (Example- (Ex- ssh -i ubuntu@44.203.176.129 'sudo cat /etc/kubernetes/admin.conf' > ./kubeconfig))
+      * (Example- (ssh -i ubuntu@44.203.176.129 'sudo cat /etc/kubernetes/admin.conf' > ./kubeconfig))
 
     #### Update the server IP in the file to the Public IP
 
