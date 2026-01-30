@@ -158,7 +158,7 @@ resource "aws_security_group" "k8s_sg" {
 
 resource "aws_instance" "control_plane" {
   ami                    = data.aws_ami.ubuntu_24_04.id
-  instance_type          = "t3.small"
+  instance_type          = "t3.medium"
   key_name               = aws_key_pair.ec2_key.key_name
   subnet_id              = aws_subnet.public_subnet_1.id
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
@@ -167,7 +167,7 @@ resource "aws_instance" "control_plane" {
 
 resource "aws_instance" "worker_01" {
   ami                    = data.aws_ami.ubuntu_24_04.id
-  instance_type          = "t3.small"
+  instance_type          = "t3.medium"
   key_name               = aws_key_pair.ec2_key.key_name
   subnet_id              = aws_subnet.public_subnet_1.id
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
@@ -176,7 +176,7 @@ resource "aws_instance" "worker_01" {
 
 resource "aws_instance" "worker_02" {
   ami                    = data.aws_ami.ubuntu_24_04.id
-  instance_type          = "t3.small"
+  instance_type          = "t3.medium"
   key_name               = aws_key_pair.ec2_key.key_name
   # Placed in the 2nd subnet for HA
   subnet_id              = aws_subnet.public_subnet_2.id
