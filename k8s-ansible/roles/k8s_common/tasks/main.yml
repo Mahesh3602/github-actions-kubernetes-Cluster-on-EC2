@@ -33,6 +33,12 @@
 - name: Apply sysctl
   command: sysctl --system
 
+- name: Force refresh apt cache and clear corrupt lists
+  shell: |
+    rm -rf /var/lib/apt/lists/*
+    apt-get update
+  become: true
+
 - name: Install prerequisite tools
   apt:
     name:
@@ -42,6 +48,9 @@
       - ca-certificates
     state: present
     update_cache: yes
+  become: true
+
+
 
 - name: Create keyring directory
   file:
